@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using Qorrect.Integration.Helper;
 using Qorrect.Integration.Models;
+using Qorrect.Integration.Services;
 using RestSharp;
 using System;
 using System.Collections.Generic;
@@ -15,9 +16,16 @@ namespace Qorrect.Integration.Controllers
     [Route("[controller]")]
     public class NavyController : ControllerBase
     {
+        CourseDataAccessLayer courseDataAccessLayer = null;
 
-        [HttpGet, Route("ImportCourseStandardFromAPI")]
-        public async Task<IActionResult> ImportCourseStandardFromAPI()
+        public NavyController()
+        {
+            courseDataAccessLayer = new CourseDataAccessLayer();
+        }
+
+
+        [HttpGet, Route("ImportCourseStandardFromAPI/{id}")]
+        public async Task<IActionResult> ImportCourseStandardFromAPI([FromRoute] string id)
         {
             #region Get Course From API
 
@@ -57,7 +65,7 @@ namespace Qorrect.Integration.Controllers
                     {
                         Name = item.fullname,
                         Code = item.shortname,
-                        CourseSubscriptionId = new Guid("D5FCB9F0-3131-4688-BBBE-6A719B54D25B"),
+                        CourseSubscriptionId = new Guid(id),
                         CourseData = new DTOCourseData
                         {
                             CourseType = CourseType.Compulsory,
@@ -83,6 +91,47 @@ namespace Qorrect.Integration.Controllers
             #endregion
 
 
+            return Ok(addedCoursed);
+        }
+
+
+        [HttpGet]
+        [Route("ImportCourseStandardFromBedo/{id}")]
+        public async Task<IActionResult> ImportCourseStandardFromBedo([FromRoute] string id)
+        {
+
+            var bedoCourses = await courseDataAccessLayer.GetAllCourses();
+            List<DTOAddEditCourse> addedCoursed = new List<DTOAddEditCourse>();
+
+            var client = new RestClient("http://localhost:5001/courses");
+            client.Timeout = -1;
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Authorization", "Bearer A79D5EA34EA54AEAD0A9B2542C49508A380FE32AF9B2442E5CDFF2D11DF863F8");
+            request.AddHeader("Content-Type", "application/json");
+
+            foreach (var item in bedoCourses)
+            {
+                DTOAddEditCourse model = new DTOAddEditCourse()
+                {
+                    Name = item.CourseName,
+                    Code = item.CourseCode,
+                    CourseSubscriptionId = new Guid(id),
+                    CourseData = new DTOCourseData
+                    {
+                        CourseType = CourseType.Elective,
+                        CreditHours = item.CreditHours,
+                        Description = item.Description,
+                        LecturesHours = item.LectureHours,
+                        PracticalHours = item.PracticalHours,
+                        TotalHours = item.ClassesHours
+                    }
+                };
+
+                request.AddParameter("application/json", JsonConvert.SerializeObject(model), ParameterType.RequestBody);
+                IRestResponse response = client.Execute(request);
+                var result = JsonConvert.DeserializeObject<DTOAddEditCourse>(response.Content);
+                addedCoursed.Add(result);
+            }
             return Ok(addedCoursed);
         }
 
